@@ -24,7 +24,7 @@ export default function ReceiptGenerator() {
   const totalAlquiler = useMemo(() => {
     const base = Number(data.alquiler );
     const inc = Number(data.aumentoPorcentual || 0);
-    const total = base * (1 + inc / 100);
+    const total = (base) * (1 + inc / 100) ;
     return isFinite(total) ? total : 0;
   }, [data.alquiler, data.aumentoPorcentual]);
 
@@ -37,7 +37,11 @@ export default function ReceiptGenerator() {
       Number(u.abl || 0));
   }, [data.utilities]);
 
-  const totalRecibo = useMemo(() => totalAlquiler + totalServicios, [totalAlquiler, totalServicios]);
+  const diferencia = useMemo(()=> {
+    return Number(data.diferencia)
+  }, [data.diferencia])
+
+  const totalRecibo = useMemo(() => totalAlquiler + totalServicios + diferencia, [totalAlquiler, totalServicios, diferencia]);
 
   const handleUtilityChange = (k: UtilityKeys, v: string) =>
     setData((d) => ({ ...d, utilities: { ...d.utilities, [k]: v === "" ? "" : Number(v) } }));
@@ -77,6 +81,8 @@ export default function ReceiptGenerator() {
         expensas: m["expensas"] !== "" ? Number(m["expensas"]) : "",
         abl: m["abl"] !== "" ? Number(m["abl"]) : "",
       },
+      diferencia: m["diferencia"] !== "" ? Number(m["diferencia"]) : "",
+      hayDiferencia: parseBoolLike(m["hayDiferencia"]),
     };
     setData(next);
   };
@@ -144,9 +150,16 @@ export default function ReceiptGenerator() {
               <NumberInput label="Alquiler (base)" value={data.alquiler} onChange={(v) => setData({ ...data, alquiler: v })} />
               <NumberInput label="Aumento %" value={data.aumentoPorcentual} onChange={(v) => setData({ ...data, aumentoPorcentual: v })} />
 
+              <NumberInput label="Diferencia " value={data.diferencia} onChange={(v) => setData({ ...data, diferencia: v })} />
+
               <div className="flex items-center gap-2">
                 <input id="aprox" type="checkbox" checked={data.aproximado} onChange={(e) => setData({ ...data, aproximado: e.target.checked })} />
                 <label htmlFor="aprox" className="text-sm">Agregar leyenda "aproximado" debajo del alquiler</label>
+              </div>
+
+               <div className="flex items-center gap-2">
+                <input id="aprox" type="checkbox" checked={data.hayDiferencia} onChange={(e) => setData({ ...data, hayDiferencia: e.target.checked })} />
+                <label htmlFor="aprox" className="text-sm">Agregar Diferencia</label>
               </div>
 
               <TextArea label="Otros conceptos" value={data.otrosConceptos} onChange={(v) => setData({ ...data, otrosConceptos: v })} />

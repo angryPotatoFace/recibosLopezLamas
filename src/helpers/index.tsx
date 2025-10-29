@@ -94,7 +94,7 @@ export function Receipt({ data, copyLabel, totalAlquiler, totalRecibo }: { data:
             </div>
           </div>
           <div className="text-[8px] font-normal text-gray-600 align-middle">De Nancy A. López COL.S.M. 1684</div>
-          <div className="text-[7px] font-normal text-gray-600 text-left">Vicente López 3007 (1653) Villa Ballester Pcia. de Buenos Aires | Tel: 4738-3525</div>
+          <div className="text-[7px] font-normal text-gray-600 text-left">Vicente López 3007 (1653) Villa Ballester Pcia. de Buenos Aires | Tel: 6080-9941</div>
           <div className="text-[10px] mt-3 font-bold align-middle">Responsable Monotributo</div>
         </div>
         <div className="w-2 my-auto mr-16">
@@ -152,7 +152,14 @@ export function Receipt({ data, copyLabel, totalAlquiler, totalRecibo }: { data:
           </div>
         } />
         <Row className="w-32 mt-1 text-nowrap" label="Dirección inmueble" value={data.direccionInmueble} />
-        <div></div>
+        { data.hayDiferencia ?  
+          <Row label="Diferencia" value={
+          <div className="flex items-center justify-between">
+            <span>{money(data.diferencia)}</span>
+          </div> } />
+          :
+          <div/>
+        }
         <Row className="mt-1 mr-28 w-2 text-nowrap" label="Propietario" value={data.propietario} />
         <div></div>
         <Row className="mt-1 w-2 text-nowrap" label="Correspondiente al mes de" value={data.mesCorrespondiente} />

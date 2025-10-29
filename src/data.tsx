@@ -19,4 +19,6 @@ export const INIT_DATA: ReceiptData = {
   otrosConceptos: "",
   observaciones: "",
   utilities: { edenor: "", gas: "", agua: "", expensas: "", abl: "" },
+  diferencia: 0,
+  hayDiferencia: false,
 };

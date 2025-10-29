@@ -22,8 +22,11 @@ export interface ReceiptData {
   mesCorrespondiente: string; // e.g., "Marzo 2025"
 
   alquiler: number | "";
+  diferencia: number | "";
   aumentoPorcentual: number | ""; // e.g., 3 for 3%
   aproximado: boolean;
+  hayDiferencia: boolean;
+
 
   otrosConceptos: string;
   observaciones: string;
