@@ -1,6 +1,8 @@
 import type { ReceiptData } from "./interfaz";
 
 export const INIT_DATA: ReceiptData = {
+  codigo: "",
+  fecha: "",
   cliente: "",
   direccion: "",
   iva: "",
