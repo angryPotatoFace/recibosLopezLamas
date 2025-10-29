@@ -207,7 +207,7 @@ export default function ReceiptGenerator() {
               {savedList.map((r, i) => (
                 <li key={i} className="py-2 flex items-center justify-between">
                   <div>
-                    <p className="font-medium">{r.mesCorrespondiente || "(sin mes)"} — {r.cliente || "(sin cliente)"}</p>
+                    <p className="font-medium">{r.codigo || ""} — {r.cliente || "(sin cliente)"} - {r.mesCorrespondiente || "(sin mes)"} </p>
                     <p className="text-xs text-gray-500 text-left">{r.direccionInmueble}</p>
                   </div>
                   <div className="flex gap-2">
