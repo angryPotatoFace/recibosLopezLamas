@@ -110,7 +110,9 @@ export function Receipt({ data, copyLabel, totalAlquiler, totalRecibo }: { data:
 
         <div className="align-text-bottom text-[10px]">
           <div className="font-bold text-[15px]">
+             <p className="font-light text-[10px] text-right">Cod: {data.codigo}</p>
              <p>RECIBO</p>
+             <p>{data.fecha}</p>
           </div>
           <div className="mt-10">
             <p>C.U.I.T: 27-17725659-0</p>
@@ -138,7 +140,7 @@ export function Receipt({ data, copyLabel, totalAlquiler, totalRecibo }: { data:
 
       <hr className="mt-2 w-full"/>
       <div className="flex mt-2 text-[10px] text-right">
-        <Row className="w-16 text-nowrap" label="Contrato" value={data.contrato} />
+        <Row className="w-16 text-nowrap" label="Contrato" />
         <Row label="Inicio" value={data.inicio} />
         <Row label="Finalización" value={data.finalizacion} />
       </div>
@@ -166,13 +168,14 @@ export function Receipt({ data, copyLabel, totalAlquiler, totalRecibo }: { data:
       </div>
 
       <div className="mt-2 grid grid-cols-2 gap-2">
-        <Box title="Facturas de servicios a entregar en inmobiliaria">
+        <Box title="Facturas de servicios abonados">
           <div className="text-[11px] space-y-1">
             <div className="flex justify-between"><span>Edenor:</span><span>{money(Number(data.utilities.edenor || 0))}</span></div>
             <div className="flex justify-between"><span>Gas Nat.:</span><span>{money(Number(data.utilities.gas || 0))}</span></div>
             <div className="flex justify-between"><span>Agua:</span><span>{money(Number(data.utilities.agua || 0))}</span></div>
             <div className="flex justify-between"><span>Expensas:</span><span>{money(Number(data.utilities.expensas || 0))}</span></div>
             <div className="flex justify-between"><span>ABL:</span><span>{money(Number(data.utilities.abl || 0))}</span></div>
+            <div className="flex justify-between"><span>Cochera:</span><span>{money(Number(data.utilities.cochera || 0))}</span></div>
           </div>
         </Box>
         <Box title="Otros conceptos">

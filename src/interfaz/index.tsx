@@ -4,9 +4,13 @@ export interface Utilities {
   agua?: number | "";
   expensas?: number | "";
   abl?: number | "";
+  cochera?: number | "";
 }
 
 export interface ReceiptData {
+  codigo: string;
+  fecha: string; // YYYY-MM-DD
+
   cliente: string;
   direccion: string;
   iva: string;
@@ -34,4 +38,4 @@ export interface ReceiptData {
 }
 
 
-export type UtilityKeys = "edenor" | "gas" | "agua" | "expensas" | "abl";
+export type UtilityKeys = "edenor" | "gas" | "agua" | "expensas" | "abl" | "cochera";
