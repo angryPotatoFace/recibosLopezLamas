@@ -81,7 +81,7 @@ function Box({ title, children }: { title: string; children: React.ReactNode }) 
   );
 }
 
-export function Receipt({ data, copyLabel, totalAlquiler, totalServicios, totalRecibo }: { data: ReceiptData; copyLabel: string; totalAlquiler: number; totalServicios: number; totalRecibo: number; }) {
+export function Receipt({ data, copyLabel, totalAlquiler, totalRecibo }: { data: ReceiptData; copyLabel: string; totalAlquiler: number; totalServicios: number; totalRecibo: number; }) {
   return (
     <div className="border rounded-xl bg-white p-4 print:shadow-none shadow-sm">
       <div className="flex items-start justify-between">
