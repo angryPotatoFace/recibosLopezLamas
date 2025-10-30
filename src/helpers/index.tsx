@@ -28,6 +28,7 @@ export function fromExcelHeader(h: string) {
   return h.replace(/\s+/g, "").toLowerCase();
 }
 
+
 export function Text({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <label className="text-sm">
@@ -83,7 +84,7 @@ function Box({ title, children }: { title: string; children: React.ReactNode }) 
 
 export function Receipt({ data, copyLabel, totalAlquiler, totalRecibo }: { data: ReceiptData; copyLabel: string; totalAlquiler: number; totalServicios: number; totalRecibo: number; }) {
   return (
-    <div className="border rounded-xl bg-white p-4 print:shadow-none shadow-sm">
+    <div className="border bg-white p-4 print:shadow-none shadow-sm">
       <div className="flex items-start justify-between">
         <div >
           <div className="flex">
@@ -110,11 +111,11 @@ export function Receipt({ data, copyLabel, totalAlquiler, totalRecibo }: { data:
 
         <div className="align-text-bottom text-[10px]">
           <div className="font-bold text-[15px]">
-             <p className="font-light text-[10px] text-right">Cod: {data.codigo}</p>
+             <p className="font-light text-[10px] text-right"><span>{data.numeroRecibo} de {data.totalRecibos}</span> - Cod: {data.codigo}</p>
              <p>RECIBO</p>
              <p>{data.fecha}</p>
           </div>
-          <div className="mt-10">
+          <div className="mt-2">
             <p>C.U.I.T: 27-17725659-0</p>
             <p>Ing. Brutos: 27-17725659-0</p>
             <p>Inicio de actividades: 01-03-91</p>
@@ -139,8 +140,9 @@ export function Receipt({ data, copyLabel, totalAlquiler, totalRecibo }: { data:
         </div>
 
       <hr className="mt-2 w-full"/>
-      <div className="flex mt-2 text-[10px] text-right">
-        <Row className="w-16 text-nowrap" label="Contrato" />
+      <h4 className="text-[11px] font-bold mt-2">DETALLE CONTRATO</h4>
+      <div className="flex mt-2 text-[9px] text-right">
+        <Row className="w-16 text-nowrap" label="Tipo ajuste" value={data.tipoAjuste} />
         <Row label="Inicio" value={data.inicio} />
         <Row label="Finalización" value={data.finalizacion} />
       </div>
@@ -162,9 +164,19 @@ export function Receipt({ data, copyLabel, totalAlquiler, totalRecibo }: { data:
           :
           <div/>
         }
+          
         <Row className="mt-1 mr-28 w-2 text-nowrap" label="Propietario" value={data.propietario} />
-        <div></div>
+        <Row className="mt-1 mr-28 w-2 text-nowrap" label="DNI" value={data.dniPropietario} />
+
         <Row className="mt-1 w-2 text-nowrap" label="Correspondiente al mes de" value={data.mesCorrespondiente} />
+        <div></div>
+        <div></div>
+        { data.hayPunitorios ?  
+          <Row label="Punitorios" value={
+          <div className="flex items-center justify-between mt-1">{money(data.punitorios)}</div> } />
+          :
+          <div/>
+        }
       </div>
 
       <div className="mt-2 grid grid-cols-2 gap-2">

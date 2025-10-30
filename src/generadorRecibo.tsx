@@ -38,68 +38,26 @@ export default function ReceiptGenerator() {
       Number(u.cochera || 0);
   }, [data.utilities]);
 
-  const diferencia = useMemo(()=> {
-    return Number(data.diferencia)
-  }, [data.diferencia])
+  const diferencia = useMemo(() => {
+    
+    if (!data.hayDiferencia) return 0; // si hayDiferencia no está tildado, no sumar nada
 
-  const totalRecibo = useMemo(() => totalAlquiler + totalServicios + diferencia, [totalAlquiler, totalServicios, diferencia]);
+    return Number(data.diferencia || 0);    // si viene "", null o undefined → 0
+  }, [data.diferencia, data.hayDiferencia]);
+
+  const punitorios = useMemo(() => {
+    
+    if (!data.hayPunitorios) return 0; // si hayDiferencia no está tildado, no sumar nada
+
+    return Number(data.punitorios || 0);    // si viene "", null o undefined → 0
+  }, [data.punitorios, data.hayPunitorios]);
+
+  const totalRecibo = useMemo(() => totalAlquiler + totalServicios + diferencia + punitorios, [totalAlquiler, totalServicios, diferencia, punitorios]);
 
   const handleUtilityChange = (k: UtilityKeys, v: string) =>
     setData((d) => ({ ...d, utilities: { ...d.utilities, [k]: v === "" ? "" : Number(v) } }));
 
-  const handleExcel = async (file: File) => {
-    const buf = await file.arrayBuffer();
-    const wb = XLSX.read(buf);
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
-    if (!rows.length) return;
-
-    // Convierte TODAS las filas del Excel a ReceiptData[]
-    const parsed: ReceiptData[] = rows.map((r: any) => {
-      const m: Record<string, any> = {};
-      Object.entries(r).forEach(([k, v]) => (m[fromExcelHeader(k)] = v));
-
-      const item: ReceiptData = {
-        codigo: m["codigo"] ?? "",
-        fecha: m["fecha"] ?? "",
-        cliente: m["cliente"] ?? "",
-        direccion: m["direccion"] ?? "",
-        iva: m["iva"] ?? "",
-        cuiltDni: m["cuilt_dni"] ?? m["cuil"] ?? m["dni"] ?? "",
-        localidad: m["localidad"] ?? "",
-        contrato: m["contrato"] ?? "",
-        inicio: m["inicio"] ?? "",
-        finalizacion: m["finalizacion"] ?? "",
-        enConceptoDe: m["enconceptode"] ?? "",
-        direccionInmueble: m["direccioninmueble"] ?? "",
-        propietario: m["propietario"] ?? "",
-        mesCorrespondiente: m["mescorrespondiente"] ?? "",
-        alquiler: m["alquiler"] !== "" ? Number(m["alquiler"]) : "",
-        aumentoPorcentual: m["aumentoporcentual"] !== "" ? Number(m["aumentoporcentual"]) : 0,
-        aproximado: parseBoolLike(m["aproximado"]),
-        otrosConceptos: m["otrosconceptos"] ?? "",
-        observaciones: m["observaciones"] ?? "",
-        utilities: {
-          edenor: m["edenor"] !== "" ? Number(m["edenor"]) : "",
-          gas: m["gas"] !== "" ? Number(m["gas"]) : "",
-          agua: m["agua"] !== "" ? Number(m["agua"]) : "",
-          expensas: m["expensas"] !== "" ? Number(m["expensas"]) : "",
-          abl: m["abl"] !== "" ? Number(m["abl"]) : "",
-          cochera: m["cochera"] !== "" ? Number(m["cochera"]) : "",
-        },
-        diferencia: m["diferencia"] !== "" ? Number(m["diferencia"]) : "",
-        hayDiferencia: parseBoolLike(m["hayDiferencia"]),
-      };
-      return item;
-    });
-
-    // Agrega todas las filas a “Recibos guardados” (al principio) y carga la primera en el formulario
-    setSavedList((prev) => [...parsed, ...prev]);
-    setData(parsed[0] ?? { ...EMPTY_DATA });
-  };
-
   const handleSave = () => setSavedList((list) => [data, ...list]);
-  
 
   const handleNew = () => setData({ ...EMPTY_DATA });
 
@@ -111,6 +69,94 @@ export default function ReceiptGenerator() {
     if (!confirm("¿Borrar este recibo guardado? Esta acción no se puede deshacer.")) return;
     setSavedList((prev) => prev.filter((_, i) => i !== idx));
   };
+
+  const handleDeleteAll = () => {
+    if (!confirm("¿Borrar TODOS los recibos guardados? Esta acción no se puede deshacer.")) return;
+    setSavedList([]);
+    localStorage.removeItem("recibos_llamas");
+  };
+
+
+
+  const handleExcel = async (file: File) => {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows: any[] = XLSX.utils.sheet_to_json(ws, { defval: "" });
+    if (!rows.length) return;
+
+    const parsed: ReceiptData[] = rows.map((r: any) => {
+        const m: Record<string, any> = {};
+        Object.entries(r).forEach(([k, v]) => (m[fromExcelHeader(k)] = v));
+
+        const item: ReceiptData = {
+          codigo: m["codigo"] ?? "",
+          fecha: excelDateToString(m["fecha"]),
+          cliente: m["cliente"] ?? "",
+          direccion: m["direccion"] ?? "",
+          iva: m["iva"] ?? "",
+          cuiltDni: m["cuilt_dni"] ?? m["cuil"] ?? m["dni"] ?? "",
+          localidad: m["localidad"] ?? "",
+          contrato: m["contrato"] ?? "",
+          inicio: excelDateToString(m["inicio"]),
+          finalizacion: excelDateToString(m["finalizacion"]),
+          enConceptoDe: m["enconceptode"] ?? "",
+          direccionInmueble: m["direccioninmueble"] ?? "",
+          propietario: m["propietario"] ?? "",
+          dniPropietario: m["dnipropietario"] ?? "",
+          mesCorrespondiente: m["mescorrespondiente"] ?? "",
+          alquiler: m["alquiler"] !== "" ? Number(m["alquiler"]) : "",
+          aumentoPorcentual:
+            m["aumentoporcentual"] !== "" ? Number(m["aumentoporcentual"]) : 0,
+          aproximado: parseBoolLike(m["aproximado"]),
+          otrosConceptos: m["otrosconceptos"] ?? "",
+          observaciones: m["observaciones"] ?? "",
+          utilities: {
+            edenor: m["edenor"] !== "" ? Number(m["edenor"]) : "",
+            gas: m["gas"] !== "" ? Number(m["gas"]) : "",
+            agua: m["agua"] !== "" ? Number(m["agua"]) : "",
+            expensas: m["expensas"] !== "" ? Number(m["expensas"]) : "",
+            abl: m["abl"] !== "" ? Number(m["abl"]) : "",
+            cochera: m["cochera"] !== "" ? Number(m["cochera"]) : "",
+          },
+          diferencia: m["diferencia"] !== "" ? Number(m["diferencia"]) : "",
+          hayDiferencia: parseBoolLike(m["hayDiferencia"]),
+          tipoAjuste: m["tipoajuste"] ?? "",
+          numeroRecibo: m["numerorecibo"] ?? "",
+          totalRecibos: m["totalrecibos"] ?? "",
+          punitorios: m["punitorios"] !== "" ? Number(m["punitorios"]) : "",
+          hayPunitorios: parseBoolLike(m["hayPunitorios"]),
+        };
+
+        return item;
+      });
+
+      setSavedList((prev) => [...parsed, ...prev]);
+      setData(parsed[0] ?? { ...EMPTY_DATA });
+  };
+
+  function excelDateToString(v: any): string {
+    let date: Date | null = null;
+
+    if (typeof v === "number" && !isNaN(v)) {
+      // Excel serial → JS Date
+      date = new Date((v - 25569) * 86400 * 1000);
+    } else if (v instanceof Date) {
+      date = v;
+    } else if (typeof v === "string") {
+      const d = new Date(v);
+      if (!isNaN(d.getTime())) date = d;
+    }
+
+    if (!date) return "";
+
+    // Formato DD-MM-YYYY
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
+  }
+
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
@@ -166,6 +212,8 @@ export default function ReceiptGenerator() {
               <NumberInput label="Aumento %" value={data.aumentoPorcentual} onChange={(v) => setData({ ...data, aumentoPorcentual: v })} />
 
               <NumberInput label="Diferencia " value={data.diferencia} onChange={(v) => setData({ ...data, diferencia: v })} />
+              <NumberInput label="Punitorios " value={data.punitorios} onChange={(v) => setData({ ...data, punitorios: v })} />
+
 
               <div className="flex items-center gap-2">
                 <input id="aprox" type="checkbox" checked={data.aproximado} onChange={(e) => setData({ ...data, aproximado: e.target.checked })} />
@@ -177,6 +225,10 @@ export default function ReceiptGenerator() {
                 <label htmlFor="aprox" className="text-sm">Agregar Diferencia</label>
               </div>
 
+              <div className="flex items-center gap-2">
+                <input id="aprox" type="checkbox" checked={data.hayPunitorios} onChange={(e) => setData({ ...data, hayPunitorios: e.target.checked })} />
+                <label htmlFor="aprox" className="text-sm">Agregar Punitorios</label>
+              </div>
               <TextArea label="Otros conceptos" value={data.otrosConceptos} onChange={(v) => setData({ ...data, otrosConceptos: v })} />
               <TextArea label="Observaciones (no se imprime)" value={data.observaciones} onChange={(v) => setData({ ...data, observaciones: v })} />
             </div>
@@ -201,13 +253,16 @@ export default function ReceiptGenerator() {
 
           {/* Saved months */}
           <div className="bg-white rounded-2xl shadow p-4 mt-4">
-            <h2 className="text-xl font-semibold mb-2">Recibos guardados</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold mb-2">Recibos guardados</h2>
+              <button onClick={handleDeleteAll} className="px-3 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700" > Borrar todos</button>
+            </div>
             {savedList.length === 0 && <p className="text-sm text-gray-500">Aún no guardaste recibos.</p>}
             <ul className="divide-y">
               {savedList.map((r, i) => (
                 <li key={i} className="py-2 flex items-center justify-between">
                   <div>
-                    <p className="font-medium">{r.codigo || ""} — {r.cliente || "(sin cliente)"} - {r.mesCorrespondiente || "(sin mes)"} </p>
+                    <p className="font-medium">{r.codigo || ""} - {r.cliente || "(sin cliente)"} - {r.mesCorrespondiente || "(sin mes)"} </p>
                     <p className="text-xs text-gray-500 text-left">{r.direccionInmueble}</p>
                   </div>
                   <div className="flex gap-2">

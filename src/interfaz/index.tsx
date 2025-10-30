@@ -9,7 +9,9 @@ export interface Utilities {
 
 export interface ReceiptData {
   codigo: string;
-  fecha: string; // YYYY-MM-DD
+  fecha: string; // DD-MM-YYYY
+  numeroRecibo: string,
+  totalRecibos: string,
 
   cliente: string;
   direccion: string;
@@ -18,22 +20,26 @@ export interface ReceiptData {
   localidad: string;
 
   contrato: string;
-  inicio: string; // YYYY-MM-DD
-  finalizacion: string; // YYYY-MM-DD
+  inicio: string; // DD-MM-YYYY
+  finalizacion: string; // DD-MM-YYYY
   enConceptoDe: string; // e.g., "Locación de inmueble"
   direccionInmueble: string;
   propietario: string;
+  dniPropietario: string;
   mesCorrespondiente: string; // e.g., "Marzo 2025"
 
   alquiler: number | "";
   diferencia: number | "";
+  punitorios: number | "";
   aumentoPorcentual: number | ""; // e.g., 3 for 3%
   aproximado: boolean;
   hayDiferencia: boolean;
+  hayPunitorios: boolean;
 
 
   otrosConceptos: string;
   observaciones: string;
+  tipoAjuste: string;
   utilities: Utilities;
 }
 
