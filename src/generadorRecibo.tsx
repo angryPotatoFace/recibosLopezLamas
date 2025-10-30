@@ -139,13 +139,14 @@ export default function ReceiptGenerator() {
     let date: Date | null = null;
 
     if (typeof v === "number" && !isNaN(v)) {
-      // Excel serial → JS Date
-      date = new Date((v - 25569) * 86400 * 1000);
+      // Excel serial → JS Date (corrige desfase de zona horaria)
+      date = new Date(Math.round((v - 25569) * 86400 * 1000));
+      date = new Date(date.getTime() + date.getTimezoneOffset() * 60000); // corrige zona horaria
     } else if (v instanceof Date) {
-      date = v;
+      date = new Date(v.getTime() + v.getTimezoneOffset() * 60000);
     } else if (typeof v === "string") {
       const d = new Date(v);
-      if (!isNaN(d.getTime())) date = d;
+      if (!isNaN(d.getTime())) date = new Date(d.getTime() + d.getTimezoneOffset() * 60000);
     }
 
     if (!date) return "";
@@ -155,7 +156,7 @@ export default function ReceiptGenerator() {
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const year = date.getFullYear();
     return `${day}-${month}-${year}`;
-  }
+}
 
 
   return (
