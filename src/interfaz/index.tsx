@@ -45,3 +45,86 @@ export interface ReceiptData {
 
 
 export type UtilityKeys = "edenor" | "gas" | "agua" | "expensas" | "abl" | "cochera";
+
+export type ReceiptType = "INMOBILIARIA" | "CONSORCIO";
+
+export interface AdministrationSettings {
+  id: string;
+  logo: string;
+  razonSocial: string;
+  cuit: string;
+  rpa: string;
+  direccion: string;
+  telefono: string;
+  email: string;
+  firmaUrl: string;
+  firmaAclaracion: string;
+}
+
+export interface Consortium {
+  id: string;
+  nombre: string;
+  direccion: string;
+  localidad: string;
+}
+
+export interface Unit {
+  id: string;
+  consortiumId: string;
+  numeroUF: string;
+  piso: string;
+  departamento: string;
+  porcentajeExpensas: number | "";
+}
+
+export interface Owner {
+  id: string;
+  nombre: string;
+  cuitDni: string;
+  telefono: string;
+  email: string;
+}
+
+export interface ExpenseAccountStatus {
+  saldoAnterior: number | "";
+  pagoRealizado: number | "";
+  saldoAFavor: number | "";
+}
+
+export type PaymentMethod =
+  | "Efectivo"
+  | "Transferencia"
+  | "Mercado Pago"
+  | "Cheque"
+  | "Otro";
+
+export interface ExpenseReceiptConcept {
+  id: string;
+  description: string;
+  amount: number | "";
+}
+
+export interface ExpenseReceipt {
+  id: string;
+  receiptNumber: string;
+  date: string;
+  period: string;
+  consortiumId: string;
+  unitId: string;
+  ownerId: string;
+  accountStatus: ExpenseAccountStatus;
+  paymentMethod: PaymentMethod;
+  paymentDetails: string;
+  totalAmount: number;
+  notes: string;
+  status: "draft";
+  concepts: ExpenseReceiptConcept[];
+}
+
+export interface ConsortiumWorkbookData {
+  administration: AdministrationSettings;
+  consortiums: Consortium[];
+  units: Unit[];
+  owners: Owner[];
+  receipts: ExpenseReceipt[];
+}
