@@ -57,6 +57,7 @@ export interface AdministrationSettings {
   direccion: string;
   telefono: string;
   email: string;
+  website: string;
   firmaUrl: string;
   firmaAclaracion: string;
 }
@@ -66,6 +67,8 @@ export interface Consortium {
   nombre: string;
   direccion: string;
   localidad: string;
+  cuit: string;
+  documentUrl: string;
 }
 
 export interface Unit {

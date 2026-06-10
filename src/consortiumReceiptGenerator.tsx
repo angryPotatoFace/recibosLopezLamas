@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import ConsortiumReceiptPreview from "./consortiumReceiptPreview";
+import { generateConsortiumReceiptPdf } from "./consortiumReceiptPdfTemplate";
 import {
   createExpenseReceiptDraft,
   loadAdministrationSettings,
@@ -201,6 +202,8 @@ function createBlankConsortium(): Consortium {
     nombre: "",
     direccion: "",
     localidad: "",
+    cuit: "",
+    documentUrl: "",
   };
 }
 
@@ -391,6 +394,9 @@ function parseWorkbookRows(rows: any[], currentAdministration: AdministrationSet
     email: String(
       getFirstValue(firstRow, ["emailadministracion", "emailadmin", "email"], currentAdministration.email),
     ),
+    website: String(
+      getFirstValue(firstRow, ["websiteadministracion", "website", "sitio", "web"], currentAdministration.website),
+    ),
     firmaAclaracion: String(
       getFirstValue(firstRow, ["firmaaclaracion"], currentAdministration.firmaAclaracion),
     ),
@@ -423,6 +429,12 @@ function parseWorkbookRows(rows: any[], currentAdministration: AdministrationSet
       nombre: consortiumName || `Consorcio ${index + 1}`,
       direccion: consortiumAddress,
       localidad: consortiumLocation,
+      cuit: String(
+        getFirstValue(row, ["cuitconsorcio", "cuitedificio", "cuitcons"]),
+      ),
+      documentUrl: String(
+        getFirstValue(row, ["urldocumentacion", "driveconsorcio", "documentosconsorcio", "documenturl", "driveurl"]),
+      ),
     };
     consortiumsMap.set(consortium.id, consortium);
 
@@ -610,6 +622,10 @@ export default function ConsortiumReceiptGenerator() {
     return saved[0] ?? createReceiptFromDraft();
   });
   const [errors, setErrors] = useState<ExpenseErrors>({});
+  const [feedback, setFeedback] = useState<{
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     saveAdministrationSettings(administration);
@@ -746,6 +762,7 @@ export default function ConsortiumReceiptGenerator() {
 
   function handleNewReceipt() {
     setErrors({});
+    setFeedback({ type: "info", message: "Recibo reiniciado. Ya podes cargar uno nuevo." });
     const newReceipt = createReceiptFromDraft();
     setReceipt(newReceipt);
   }
@@ -793,7 +810,13 @@ export default function ConsortiumReceiptGenerator() {
     const nextReceipt = normalizeReceiptFinancials(receipt);
     const nextErrors = validateReceipt(nextReceipt);
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
+    if (Object.keys(nextErrors).length > 0) {
+      setFeedback({
+        type: "error",
+        message: "Revisa los campos obligatorios antes de guardar.",
+      });
+      return;
+    }
 
     const receiptId = nextReceipt.id || crypto.randomUUID();
     const readyReceipt = { ...nextReceipt, id: receiptId };
@@ -814,10 +837,15 @@ export default function ConsortiumReceiptGenerator() {
       accountStatus: { ...readyReceipt.accountStatus },
       concepts: readyReceipt.concepts.map((concept) => ({ ...concept })),
     });
+    setFeedback({
+      type: "success",
+      message: `Recibo ${readyReceipt.receiptNumber || "sin numero"} guardado correctamente.`,
+    });
   }
 
   function handleLoadReceipt(index: number) {
     setErrors({});
+    setFeedback(null);
     const selectedReceipt = savedReceipts[index];
     const normalizedReceipt = normalizeReceiptFinancials(selectedReceipt);
     setReceipt({
@@ -838,11 +866,43 @@ export default function ConsortiumReceiptGenerator() {
     localStorage.removeItem("recibos_llamas_consorcio_receipts");
   }
 
-  function handlePrint() {
-    const nextErrors = validateReceipt(normalizeReceiptFinancials(receipt));
+  async function handlePrintReceipt() {
+    console.log("[PDF] click en boton Imprimir");
+    const normalizedReceipt = normalizeReceiptFinancials(receipt);
+    const nextErrors = validateReceipt(normalizedReceipt);
     setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
-    window.print();
+    if (Object.keys(nextErrors).length > 0) {
+      setFeedback({
+        type: "error",
+        message: "No se puede imprimir hasta completar los datos obligatorios.",
+      });
+      return;
+    }
+
+    try {
+      console.log("[PDF] invocando generador compacto desde consortiumReceiptGenerator");
+      const result = await generateConsortiumReceiptPdf({
+        administration,
+        consortium: selectedConsortium,
+        unit: selectedUnit,
+        owner: selectedOwner,
+        receipt: normalizedReceipt,
+      });
+      console.log("[PDF] resultado generador compacto", result);
+      setFeedback({
+        type: result.pageCount === 1 ? "success" : "error",
+        message:
+          result.pageCount === 1
+            ? "PDF compacto generado en 1 pagina."
+            : `El PDF compacto genero ${result.pageCount} paginas.`,
+      });
+    } catch {
+      console.error("[PDF] fallo la generacion del PDF compacto");
+      setFeedback({
+        type: "error",
+        message: "No se pudo generar el PDF del recibo.",
+      });
+    }
   }
 
   async function handleExcelImport(file: File) {
@@ -896,15 +956,29 @@ export default function ConsortiumReceiptGenerator() {
           </button>
           <button
             className="rounded-xl bg-emerald-600 px-3 py-2 text-white hover:bg-emerald-700"
-            onClick={handlePrint}
+            onClick={() => void handlePrintReceipt()}
           >
-            Imprimir
+            Descargar PDF compacto
           </button>
         </div>
       </header>
 
-      <main className="grid grid-cols-1 gap-6 p-4 lg:grid-cols-2">
+      <main className="grid grid-cols-1 gap-6 p-4 2xl:grid-cols-[430px_minmax(0,860px)] 2xl:items-start 2xl:justify-center">
         <section className="print:hidden">
+          {feedback ? (
+            <div
+              className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+                feedback.type === "success"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : feedback.type === "error"
+                    ? "border-red-200 bg-red-50 text-red-800"
+                    : "border-sky-200 bg-sky-50 text-sky-800"
+              }`}
+            >
+              {feedback.message}
+            </div>
+          ) : null}
+
           <div className="rounded-2xl bg-white p-4 shadow">
             <SectionTitle
               title="Configuracion administracion"
@@ -922,19 +996,10 @@ export default function ConsortiumReceiptGenerator() {
                     if (file) handleExcelImport(file);
                   }}
                 />
-                <span className="rounded-xl bg-indigo-600 px-3 py-2 text-white hover:bg-indigo-700">
+                <span className="rounded-xl bg-indigo-600 px-3 py-2 text-white hover:bg-indigo-700 mx-auto">
                   Importar Excel
                 </span>
               </label>
-              <p className="text-xs text-slate-500">
-                Headers sugeridos: administracion, cuit, rpa, direccionadministracion,
-                telefonoadministracion, emailadministracion, consorcio, direccionconsorcio,
-                localidad, uf, piso, departamento/depto, propietario/inquilino, cuitdni,
-                numerorecibo, fecha, periodo, saldoanterior, pagorealizado, saldoafavor,
-                formadepago, lugaryformadepago, deuda, expensas ordinarias,
-                expensas extraordinarias, intereses por mora, fondo de reserva,
-                abl, agua, gas, luz, otros o pares concepto1/importe1.
-              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -969,11 +1034,15 @@ export default function ConsortiumReceiptGenerator() {
                 onChange={(value) => updateAdministration("email", value)}
               />
               <Text
+                label="Sitio web"
+                value={administration.website}
+                onChange={(value) => updateAdministration("website", value)}
+              />
+              <Text
                 label="Aclaracion firma"
                 value={administration.firmaAclaracion}
                 onChange={(value) => updateAdministration("firmaAclaracion", value)}
               />
-              <div />
               <FileField
                 label="Logo"
                 onFileChange={(file) => handleImageUpload(file, "logo")}
@@ -1045,6 +1114,16 @@ export default function ConsortiumReceiptGenerator() {
                 label="Localidad"
                 value={selectedConsortium?.localidad ?? ""}
                 onChange={(value) => updateSelectedConsortium("localidad", value)}
+              />
+              <Text
+                label="CUIT del consorcio"
+                value={selectedConsortium?.cuit ?? ""}
+                onChange={(value) => updateSelectedConsortium("cuit", value)}
+              />
+              <Text
+                label="URL documentacion / Drive"
+                value={selectedConsortium?.documentUrl ?? ""}
+                onChange={(value) => updateSelectedConsortium("documentUrl", value)}
               />
               <Text
                 label="Numero de recibo"
@@ -1332,7 +1411,7 @@ export default function ConsortiumReceiptGenerator() {
           </div>
         </section>
 
-        <section>
+        <section className="2xl:sticky 2xl:top-4 2xl:self-start">
           <ConsortiumReceiptPreview
             administration={administration}
             consortium={selectedConsortium}
@@ -1343,13 +1422,6 @@ export default function ConsortiumReceiptGenerator() {
         </section>
       </main>
 
-      <style>{`
-        @media print {
-          header, .print\\:hidden, .print-hidden { display: none !important; }
-          main { grid-template-columns: 1fr !important; }
-          body { background: white; }
-        }
-      `}</style>
     </div>
   );
 }

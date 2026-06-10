@@ -31,10 +31,19 @@ function writeStorage<T>(key: string, data: T) {
 }
 
 export function loadAdministrationSettings(): AdministrationSettings {
-  return readStorage(
+  const stored = readStorage(
     CONSORTIUM_STORAGE_KEYS.administration,
     CONSORTIUM_ADMINISTRATION_INIT,
   );
+
+  return {
+    ...CONSORTIUM_ADMINISTRATION_INIT,
+    ...stored,
+    logo: stored.logo || CONSORTIUM_ADMINISTRATION_INIT.logo,
+    firmaUrl: stored.firmaUrl || CONSORTIUM_ADMINISTRATION_INIT.firmaUrl,
+    firmaAclaracion:
+      stored.firmaAclaracion || CONSORTIUM_ADMINISTRATION_INIT.firmaAclaracion,
+  };
 }
 
 export function saveAdministrationSettings(data: AdministrationSettings) {

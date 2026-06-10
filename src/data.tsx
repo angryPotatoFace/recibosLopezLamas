@@ -6,6 +6,8 @@ import type {
   ReceiptData,
   Unit,
 } from "./interfaz";
+import PivaConsortiumLogo from "./assets/piva-logo-consorcio.png";
+import PivaSignature from "./assets/piva-signature.jpg";
 
 export const INIT_DATA: ReceiptData = {
   codigo: "",
@@ -40,15 +42,16 @@ export const INIT_DATA: ReceiptData = {
 
 export const CONSORTIUM_ADMINISTRATION_INIT: AdministrationSettings = {
   id: "consorcio-admin-default",
-  logo: "",
+  logo: PivaConsortiumLogo,
   razonSocial: "PIVA Administracion y Servicios",
   cuit: "",
   rpa: "",
   direccion: "",
   telefono: "",
   email: "",
-  firmaUrl: "",
-  firmaAclaracion: "",
+  website: "www.piva.com.ar",
+  firmaUrl: PivaSignature,
+  firmaAclaracion: "Firma autorizada y aclaracion",
 };
 
 export const CONSORTIUMS_INIT: Consortium[] = [];
