@@ -1,4 +1,9 @@
 import { jsPDF } from "jspdf";
+import {
+  buildPdfQrImageDataUrl,
+  getConsortiumDocumentUrl,
+  getQrSectionSummary,
+} from "./consortiumPdfQr.js";
 import { money } from "./helpers";
 import {
   getReceiptPaidTotal,
@@ -350,7 +355,7 @@ function drawInfoCards(doc: jsPDF, data: ConsortiumReceiptPdfTemplateData, y: nu
   rightY += 1.6;
   rightY += drawLabelValue(doc, "CUIT:", formatText(data.administration.cuit), rightX + 4, rightY, 24, 60);
   rightY += 1.6;
-  rightY += drawLabelValue(doc, "RPA:", formatText(data.administration.rpa), rightX + 4, rightY, 24, 60);
+  drawLabelValue(doc, "RPA:", formatText(data.administration.rpa), rightX + 4, rightY, 24, 60);
 
   return y + height + 4;
 }
@@ -362,7 +367,7 @@ function drawUnitCard(doc: jsPDF, data: ConsortiumReceiptPdfTemplateData, y: num
   let rowY = y + 14;
   rowY += drawLabelValue(doc, "Propietario / Inquilino:", formatText(data.owner?.nombre), MARGIN + 4, rowY, 30, 58);
   rowY += 1.4;
-  rowY += drawLabelValue(doc, "CUIT / DNI:", formatText(data.owner?.cuitDni), MARGIN + 4, rowY, 30, 58);
+  drawLabelValue(doc, "CUIT / DNI:", formatText(data.owner?.cuitDni), MARGIN + 4, rowY, 30, 58);
 
   let midY = y + 14;
   midY += drawLabelValue(doc, "Unidad Funcional:", formatText(data.unit?.numeroUF), MARGIN + 83, midY, 24, 16);
@@ -500,13 +505,99 @@ function drawTotalBar(doc: jsPDF, totalPaid: number, y: number) {
   return y + height + 4;
 }
 
+function drawQrSection(
+  doc: jsPDF,
+  data: ConsortiumReceiptPdfTemplateData,
+  y: number,
+  qrDataUrl: string | null,
+) {
+  const documentUrl = getConsortiumDocumentUrl(data.consortium);
+  const section = getQrSectionSummary(documentUrl);
+  if (!section || !qrDataUrl) return y;
+
+  const sectionX = MARGIN;
+  const sectionWidth = CONTENT_WIDTH;
+  const sectionHeight = section.height;
+  const padding = 4;
+  const gap = 5;
+  const leftWidth = 70;
+  const qrColWidth = 34;
+  const rightWidth = sectionWidth - padding * 2 - leftWidth - qrColWidth - gap * 2;
+  const leftX = sectionX + padding;
+  const qrColX = leftX + leftWidth + gap;
+  const rightX = qrColX + qrColWidth + gap;
+  const qrSize = 20;
+  const qrBoxSize = 26;
+  const qrBoxPadding = 3;
+  const qrBoxX = qrColX + (qrColWidth - qrBoxSize) / 2;
+  const qrBoxY = y + 8.5;
+  const qrImageX = qrBoxX + qrBoxPadding;
+  const qrImageY = qrBoxY + qrBoxPadding;
+  const qrText = "Liquidaciones y recibos · Actas · Reglamento · Seguros · Mantenimiento";
+  const fullUrl = documentUrl;
+  const displayUrl =
+    fullUrl.length > 70 ? `${fullUrl.slice(0, 67).trimEnd()}...` : fullUrl;
+
+  drawRoundedBlock(doc, sectionX, y, sectionWidth, sectionHeight, {
+    stroke: BORDER,
+    radius: 2.5,
+  });
+  drawSectionTitle(doc, section.title, sectionX, y, sectionWidth, "blue");
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.7);
+  setTextColor(doc, MUTED);
+  let leftY = y + 13;
+  leftY += drawWrappedText(doc, section.description, leftX, leftY, leftWidth, 3.1);
+  leftY += 3;
+
+  doc.setFontSize(6.5);
+  drawWrappedText(doc, qrText, leftX, leftY, leftWidth, 3, "left");
+
+  drawRoundedBlock(doc, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, {
+    fill: [248, 250, 252],
+    stroke: BORDER,
+    radius: 2.5,
+  });
+  addImageIfPresent(doc, qrDataUrl, qrImageX, qrImageY, qrSize, qrSize);
+
+  doc.setDrawColor(...BORDER);
+  doc.line(rightX - gap / 2, y + 9.5, rightX - gap / 2, y + sectionHeight - 4);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.6);
+  setTextColor(doc, TEXT);
+  let rightY = y + 12.4;
+  rightY += drawWrappedText(doc, section.notes[0], rightX, rightY, rightWidth, 3);
+  rightY += 3;
+  doc.setFont("helvetica", "bold");
+  rightY += drawWrappedText(doc, section.notes[1], rightX, rightY, rightWidth, 3);
+  rightY += 1.8;
+
+  const linkBoxHeight = 8;
+  drawRoundedBlock(doc, rightX, rightY, rightWidth, linkBoxHeight, {
+    fill: [248, 250, 252],
+    stroke: BORDER,
+    radius: 2,
+  });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.2);
+  setTextColor(doc, BLUE);
+  doc.text("Carpeta del consorcio:", rightX + 2, rightY + 2.8);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(5.8);
+  setTextColor(doc, MUTED);
+  drawWrappedText(doc, displayUrl, rightX + 2, rightY + 5.9, rightWidth - 4, 2.5);
+
+  return y + sectionHeight + 4;
+}
+
 function drawBottomRow(doc: jsPDF, data: ConsortiumReceiptPdfTemplateData, y: number) {
   const leftWidth = 62;
   const centerWidth = 56;
   const rightWidth = CONTENT_WIDTH - leftWidth - centerWidth - 4;
   const centerX = MARGIN + leftWidth + 2;
   const rightX = centerX + centerWidth + 2;
-  const height = 21;
+  const height = 19;
 
   drawRoundedBlock(doc, MARGIN, y, leftWidth, height, {
     stroke: BORDER,
@@ -531,7 +622,7 @@ function drawBottomRow(doc: jsPDF, data: ConsortiumReceiptPdfTemplateData, y: nu
   doc.text(
     formatText(data.administration.firmaAclaracion || "Firma autorizada"),
     MARGIN + leftWidth / 2,
-    y + 17.2,
+    y + 16.2,
     { align: "center", maxWidth: leftWidth - 8 },
   );
 
@@ -540,12 +631,12 @@ function drawBottomRow(doc: jsPDF, data: ConsortiumReceiptPdfTemplateData, y: nu
   setTextColor(doc, BLUE);
   doc.text("RECIBO VALIDO", centerX + centerWidth / 2, y + 8, { align: "center" });
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.9);
+  doc.setFontSize(6.5);
   setTextColor(doc, MUTED);
   doc.text(
     "Comprobante emitido por\nPIVA Administracion y Servicios.",
     centerX + centerWidth / 2,
-    y + 12.3,
+    y + 11.8,
     { align: "center" },
   );
 
@@ -554,13 +645,13 @@ function drawBottomRow(doc: jsPDF, data: ConsortiumReceiptPdfTemplateData, y: nu
   setTextColor(doc, WHITE);
   doc.text("CANALES DE CONTACTO", rightX + 4, y + 5.8);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.9);
+  doc.setFontSize(6.5);
   [
     formatText(data.administration.telefono),
     formatText(data.administration.email),
     formatText(data.administration.direccion),
   ].forEach((line, index) => {
-    doc.text(line, rightX + 4, y + 10.2 + index * 3.3, {
+    doc.text(line, rightX + 4, y + 9.8 + index * 2.9, {
       maxWidth: rightWidth - 8,
     });
   });
@@ -602,6 +693,8 @@ export async function generateConsortiumReceiptPdf(
   y = drawUnitCard(doc, data, y);
   const accountResult = drawAccountAndFinal(doc, data, y);
   y = drawTotalBar(doc, getReceiptPaidTotal(data.receipt), accountResult.totalY);
+  const qrDataUrl = await buildPdfQrImageDataUrl(getConsortiumDocumentUrl(data.consortium));
+  y = drawQrSection(doc, data, y, qrDataUrl);
   y = drawBottomRow(doc, data, y);
   drawDisclaimer(doc, y);
   console.log("[PDF] template compacto renderizado");
