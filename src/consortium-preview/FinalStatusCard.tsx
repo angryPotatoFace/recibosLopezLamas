@@ -1,9 +1,9 @@
 export default function FinalStatusCard({
-  difference,
+  hasDebt,
 }: {
-  difference: number;
+  hasDebt: boolean;
 }) {
-  const clear = difference <= 0;
+  const clear = !hasDebt;
 
   return (
     <section className="final-status-card receipt-section flex h-full flex-col items-center justify-center rounded-[22px] border border-slate-200 bg-white px-5 py-6 text-center shadow-[0_10px_30px_rgba(8,35,48,0.08)] print:break-inside-avoid print:rounded-[14px] print:px-4 print:py-4 print:shadow-none md:px-6">

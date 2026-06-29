@@ -94,6 +94,21 @@ export interface ExpenseAccountStatus {
   saldoAFavor: number | "";
 }
 
+export interface ExpenseAccountStatementConcept {
+  id: string;
+  description: string;
+  amount: string;
+}
+
+export interface ExpenseAccountStatement {
+  monthlyConcepts: ExpenseAccountStatementConcept[];
+  historicDebt: string;
+  interest: string;
+  totalToPay: string;
+  paymentMade: string;
+  difference: string;
+}
+
 export type PaymentMethod =
   | "Efectivo"
   | "Transferencia"
@@ -119,9 +134,11 @@ export interface ExpenseReceipt {
   paymentMethod: PaymentMethod;
   paymentDetails: string;
   totalAmount: number;
+  poseeDeuda: boolean;
   notes: string;
   status: "draft";
   concepts: ExpenseReceiptConcept[];
+  accountStatement: ExpenseAccountStatement;
 }
 
 export interface ConsortiumWorkbookData {

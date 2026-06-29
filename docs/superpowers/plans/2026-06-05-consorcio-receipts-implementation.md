@@ -240,7 +240,7 @@ test("sums valid concepts and validates required fields", () => {
   const receipt = {
     ...CONSORTIUM_INIT_DATA,
     issuerName: "PIVA",
-    clientName: "Juan Perez",
+    clientName: "Cliente Demo",
     date: "05-06-2026",
     concepts: [
       { id: "1", description: "Expensas abril 2026", amount: 120000 },
@@ -580,7 +580,7 @@ test("adds concepts, removes concepts, and recalculates total", async () => {
   const user = userEvent.setup();
   render(<ConsortiumReceiptGenerator />);
 
-  await user.type(screen.getByLabelText(/cliente/i), "Juan Perez");
+  await user.type(screen.getByLabelText(/cliente/i), "Cliente Demo");
   await user.type(screen.getByLabelText(/razon social/i), "PIVA");
   await user.type(screen.getByLabelText(/fecha/i), "05-06-2026");
 
@@ -806,7 +806,7 @@ test("renders original copy label and otros conceptos section", () => {
         ...CONSORTIUM_INIT_DATA,
         issuerName: "PIVA",
         date: "05-06-2026",
-        clientName: "Juan Perez",
+        clientName: "Cliente Demo",
         concepts: [{ id: "1", description: "Expensas", amount: 100 }],
         totalAmount: 100,
       }}
@@ -922,7 +922,7 @@ test("saves a valid receipt and reloads it from the saved list", async () => {
   render(<ConsortiumReceiptGenerator />);
 
   await user.type(screen.getByLabelText(/razon social/i), "PIVA");
-  await user.type(screen.getByLabelText(/^cliente/i), "Juan Perez");
+  await user.type(screen.getByLabelText(/^cliente/i), "Cliente Demo");
   await user.type(screen.getByLabelText(/fecha/i), "05-06-2026");
   await user.type(screen.getByLabelText(/descripcion/i), "Expensas");
   await user.type(screen.getByLabelText(/importe/i), "100");
@@ -933,7 +933,7 @@ test("saves a valid receipt and reloads it from the saved list", async () => {
   await user.click(screen.getByRole("button", { name: /nuevo/i }));
   await user.click(screen.getByRole("button", { name: /cargar/i }));
 
-  expect(screen.getByDisplayValue("Juan Perez")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("Cliente Demo")).toBeInTheDocument();
 });
 ```
 

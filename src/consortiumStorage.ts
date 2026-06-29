@@ -35,12 +35,20 @@ export function loadAdministrationSettings(): AdministrationSettings {
     CONSORTIUM_STORAGE_KEYS.administration,
     CONSORTIUM_ADMINISTRATION_INIT,
   );
+  const hasCustomSignature =
+    typeof stored.firmaUrl === "string" &&
+    stored.firmaUrl.trim().length > 0 &&
+    (stored.firmaUrl.startsWith("data:") ||
+      stored.firmaUrl.startsWith("blob:") ||
+      stored.firmaUrl.startsWith("http://") ||
+      stored.firmaUrl.startsWith("https://") ||
+      stored.firmaUrl.includes("piva-signature-nueva.jpg"));
 
   return {
     ...CONSORTIUM_ADMINISTRATION_INIT,
     ...stored,
     logo: stored.logo || CONSORTIUM_ADMINISTRATION_INIT.logo,
-    firmaUrl: stored.firmaUrl || CONSORTIUM_ADMINISTRATION_INIT.firmaUrl,
+    firmaUrl: hasCustomSignature ? stored.firmaUrl : CONSORTIUM_ADMINISTRATION_INIT.firmaUrl,
     firmaAclaracion:
       stored.firmaAclaracion || CONSORTIUM_ADMINISTRATION_INIT.firmaAclaracion,
   };
@@ -87,5 +95,11 @@ export function createExpenseReceiptDraft(): ExpenseReceipt {
     ...CONSORTIUM_INIT_DATA,
     accountStatus: { ...CONSORTIUM_INIT_DATA.accountStatus },
     concepts: CONSORTIUM_INIT_DATA.concepts.map((concept) => ({ ...concept })),
+    accountStatement: {
+      ...CONSORTIUM_INIT_DATA.accountStatement,
+      monthlyConcepts: CONSORTIUM_INIT_DATA.accountStatement.monthlyConcepts.map((concept) => ({
+        ...concept,
+      })),
+    },
   };
 }

@@ -20,29 +20,32 @@ import {
   fromExcelHeader,
   money,
   NumberInput,
+  parseBoolLike,
   Text,
   TextArea,
 } from "./helpers";
 import type {
   AdministrationSettings,
   Consortium,
+  ExpenseAccountStatementConcept,
   ExpenseReceipt,
   ExpenseReceiptConcept,
   Owner,
   PaymentMethod,
   Unit,
 } from "./interfaz";
+import {
+  formatAccountStatementAmount,
+  parseAccountStatementAmount,
+} from "./consortiumReceiptView";
 
 const DEFAULT_PAYMENT_METHOD: PaymentMethod = "Transferencia";
 
 const CONCEPT_HEADER_MAP = [
-  { key: "deuda", label: "Deuda" },
   { key: "expensasordinarias", label: "Expensas Ord." },
   { key: "expensasord", label: "Expensas Ord." },
   { key: "expensasextraordinarias", label: "Expensas Ext." },
   { key: "expensasext", label: "Expensas Ext." },
-  { key: "interesespormora", label: "Intereses por mora" },
-  { key: "interesesmora", label: "Intereses por mora" },
   { key: "fondodereserva", label: "Fondo de reserva" },
   { key: "abl", label: "ABL" },
   { key: "agua", label: "Agua" },
@@ -55,6 +58,7 @@ type ExpenseErrors = Partial<
   Record<"administration" | "consortium" | "unit" | "owner" | "date" | "period" | "concepts" | "totalAmount", string>
 > & {
   conceptRows?: Record<string, { description?: string; amount?: string }>;
+  monthlyConceptRows?: Record<string, { description?: string; amount?: string }>;
 };
 
 function parseNumber(value: unknown): number | "" {
@@ -145,7 +149,32 @@ function createConcept(description = "", amount: number | "" = ""): ExpenseRecei
   };
 }
 
-function normalizeConcept(concept: ExpenseReceiptConcept): ExpenseReceiptConcept {
+function createStatementConcept(
+  description = "",
+  amount = "",
+): ExpenseAccountStatementConcept {
+  return {
+    id: crypto.randomUUID(),
+    description,
+    amount,
+  };
+}
+
+function normalizeStatementConcept(
+  concept: ExpenseAccountStatementConcept,
+): ExpenseAccountStatementConcept {
+  return {
+    ...concept,
+    description: concept.description.trim(),
+    amount: concept.amount.trim(),
+  };
+}
+
+function normalizeStatementConcepts(concepts: ExpenseAccountStatementConcept[]) {
+  return concepts.map(normalizeStatementConcept);
+}
+
+function normalizeLegacyConcept(concept: ExpenseReceiptConcept): ExpenseReceiptConcept {
   return {
     ...concept,
     description: concept.description.trim(),
@@ -153,44 +182,71 @@ function normalizeConcept(concept: ExpenseReceiptConcept): ExpenseReceiptConcept
   };
 }
 
-function normalizeConcepts(concepts: ExpenseReceiptConcept[]) {
-  return concepts.map(normalizeConcept);
+function normalizeLegacyConcepts(concepts: ExpenseReceiptConcept[]) {
+  return concepts.map(normalizeLegacyConcept);
 }
 
-function calculateConceptsSubtotal(concepts: ExpenseReceiptConcept[]) {
-  return normalizeConcepts(concepts).reduce(
-    (total, concept) => total + Number(concept.amount || 0),
-    0,
-  );
+function syncLegacyConcepts(
+  monthlyConcepts: ExpenseAccountStatementConcept[],
+): ExpenseReceiptConcept[] {
+  const nextConcepts = monthlyConcepts
+    .map((concept) => ({
+      id: concept.id,
+      description: concept.description.trim(),
+      amount: parseNumber(concept.amount),
+    }))
+    .filter((concept) => concept.description || concept.amount !== "");
+
+  return nextConcepts.length > 0 ? nextConcepts : [createConcept()];
 }
 
-function calculateReceiptTotals(receipt: ExpenseReceipt) {
-  const conceptsSubtotal = calculateConceptsSubtotal(receipt.concepts);
-  const saldoAnterior = Number(receipt.accountStatus.saldoAnterior || 0);
-  const pagoRealizado = Number(receipt.accountStatus.pagoRealizado || 0);
-  const grossTotal = conceptsSubtotal + saldoAnterior;
-  const totalAmount = Math.max(grossTotal - pagoRealizado, 0);
-  const saldoAFavor = Math.max(pagoRealizado - grossTotal, 0);
+function cloneReceipt(receipt: ExpenseReceipt): ExpenseReceipt {
+  const draft = createExpenseReceiptDraft();
+  const migratedMonthlyConcepts =
+    receipt.accountStatement?.monthlyConcepts?.length
+      ? receipt.accountStatement.monthlyConcepts
+      : receipt.concepts?.length
+        ? receipt.concepts.map((concept) =>
+            createStatementConcept(
+              concept.description,
+              concept.amount === "" ? "" : money(Number(concept.amount)) || "",
+            ),
+          )
+        : draft.accountStatement.monthlyConcepts;
 
   return {
-    conceptsSubtotal,
-    grossTotal,
-    totalAmount,
-    saldoAFavor,
-  };
-}
-
-function normalizeReceiptFinancials(receipt: ExpenseReceipt): ExpenseReceipt {
-  const concepts = normalizeConcepts(receipt.concepts);
-  const totals = calculateReceiptTotals({ ...receipt, concepts });
-
-  return {
+    ...draft,
     ...receipt,
-    concepts,
-    totalAmount: totals.totalAmount,
+    poseeDeuda: receipt.poseeDeuda ?? draft.poseeDeuda,
     accountStatus: {
+      ...draft.accountStatus,
       ...receipt.accountStatus,
-      saldoAFavor: totals.saldoAFavor,
+    },
+    concepts: normalizeLegacyConcepts(receipt.concepts || draft.concepts).map((concept) => ({
+      ...concept,
+    })),
+    accountStatement: {
+      ...draft.accountStatement,
+      ...receipt.accountStatement,
+      monthlyConcepts: normalizeStatementConcepts(
+        migratedMonthlyConcepts,
+      ).map((concept) => ({ ...concept })),
+      totalToPay:
+        receipt.accountStatement?.totalToPay?.trim() ||
+        (receipt.totalAmount ? money(receipt.totalAmount) || "" : ""),
+      paymentMade:
+        receipt.accountStatement?.paymentMade?.trim() ||
+        (receipt.accountStatus?.pagoRealizado !== ""
+          ? money(Number(receipt.accountStatus?.pagoRealizado || 0)) || ""
+          : ""),
+      historicDebt:
+        receipt.accountStatement?.historicDebt?.trim() ||
+        (receipt.accountStatus?.saldoAnterior !== ""
+          ? money(Number(receipt.accountStatus?.saldoAnterior || 0)) || ""
+          : ""),
+      difference:
+        receipt.accountStatement?.difference?.trim() ||
+        (receipt.totalAmount ? money(receipt.totalAmount) || "" : ""),
     },
   };
 }
@@ -229,11 +285,16 @@ function createBlankOwner(): Owner {
 }
 
 function createReceiptFromDraft(): ExpenseReceipt {
-  return {
-    ...createExpenseReceiptDraft(),
+  const draft = createExpenseReceiptDraft();
+  return cloneReceipt({
+    ...draft,
     id: crypto.randomUUID(),
     concepts: [createConcept()],
-  };
+    accountStatement: {
+      ...draft.accountStatement,
+      monthlyConcepts: [createStatementConcept()],
+    },
+  });
 }
 
 function mergeUnique<T extends { id: string }>(current: T[], incoming: T[]) {
@@ -244,9 +305,9 @@ function mergeUnique<T extends { id: string }>(current: T[], incoming: T[]) {
 
 function validateReceipt(receipt: ExpenseReceipt): ExpenseErrors {
   const errors: ExpenseErrors = {};
-  const conceptRows: Record<string, { description?: string; amount?: string }> = {};
-  const normalizedReceipt = normalizeReceiptFinancials(receipt);
-  const validConcepts = normalizedReceipt.concepts.filter(
+  const monthlyConceptRows: Record<string, { description?: string; amount?: string }> = {};
+  const normalizedReceipt = cloneReceipt(receipt);
+  const validConcepts = normalizedReceipt.accountStatement.monthlyConcepts.filter(
     (concept) => concept.description.trim() || concept.amount !== "",
   );
 
@@ -257,22 +318,20 @@ function validateReceipt(receipt: ExpenseReceipt): ExpenseErrors {
   if (!receipt.period.trim()) errors.period = "El periodo es obligatorio.";
   if (validConcepts.length === 0) errors.concepts = "Debes cargar al menos un concepto.";
 
-  normalizedReceipt.concepts.forEach((concept) => {
+  normalizedReceipt.accountStatement.monthlyConcepts.forEach((concept) => {
     const rowErrors: { description?: string; amount?: string } = {};
     if (concept.description.trim() || concept.amount !== "") {
       if (!concept.description.trim()) rowErrors.description = "Ingresa un concepto.";
-      if (!(Number(concept.amount) > 0)) rowErrors.amount = "Ingresa un importe valido.";
+      if (!concept.amount.trim()) rowErrors.amount = "Ingresa un importe.";
     }
     if (rowErrors.description || rowErrors.amount) {
-      conceptRows[concept.id] = rowErrors;
+      monthlyConceptRows[concept.id] = rowErrors;
     }
   });
 
-  if (Object.keys(conceptRows).length > 0) errors.conceptRows = conceptRows;
-  if (validConcepts.length === 0) {
-    errors.totalAmount = "El total debe ser mayor a cero.";
-  } else if (normalizedReceipt.totalAmount < 0) {
-    errors.totalAmount = "El total no puede ser negativo.";
+  if (Object.keys(monthlyConceptRows).length > 0) errors.monthlyConceptRows = monthlyConceptRows;
+  if (!normalizedReceipt.accountStatement.totalToPay.trim()) {
+    errors.totalAmount = "Ingresa el total a pagar.";
   }
 
   return errors;
@@ -287,19 +346,64 @@ function parsePaymentMethod(value: unknown): PaymentMethod {
   return normalized ? "Otro" : DEFAULT_PAYMENT_METHOD;
 }
 
-function buildConcepts(row: Record<string, unknown>): ExpenseReceiptConcept[] {
-  const concepts: ExpenseReceiptConcept[] = [];
+function parseDebtFlag(value: unknown) {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (
+      [
+        "poseedeuda",
+        "posee deuda",
+        "verdadero",
+        "si",
+        "sí",
+        "true",
+        "1",
+      ].includes(normalized)
+    ) {
+      return true;
+    }
+    if (
+      [
+        "sindeuda",
+        "sin deuda",
+        "falso",
+        "no",
+        "false",
+        "0",
+      ].includes(normalized)
+    ) {
+      return false;
+    }
+  }
+
+  return parseBoolLike(value);
+}
+
+function formatImportedAmount(value: unknown) {
+  if (value === "" || value === null || value === undefined) return "";
+  if (typeof value === "number") return money(value);
+  const raw = String(value).trim();
+  if (!raw) return "";
+
+  const parsed = parseNumber(raw);
+  return parsed === "" ? raw : raw;
+}
+
+function buildMonthlyConcepts(
+  row: Record<string, unknown>,
+): ExpenseAccountStatementConcept[] {
+  const concepts: ExpenseAccountStatementConcept[] = [];
 
   CONCEPT_HEADER_MAP.forEach(({ key, label }) => {
-    const amount = parseNumber(
+    const amount = formatImportedAmount(
       getFirstValue(row, [
         key,
         key.replace(/\./g, ""),
         key.replace(/\s/g, ""),
       ]),
     );
-    if (amount !== "" && Number(amount) !== 0) {
-      concepts.push(createConcept(label, amount));
+    if (amount && parseAccountStatementAmount(amount) !== 0) {
+      concepts.push(createStatementConcept(label, amount));
     }
   });
 
@@ -315,7 +419,7 @@ function buildConcepts(row: Record<string, unknown>): ExpenseReceiptConcept[] {
           `detalle_${index}`,
         ]),
       ).trim();
-    const amount = parseNumber(
+    const amount = formatImportedAmount(
       getFirstValue(row, [
         `importe${index}`,
         `importe_${index}`,
@@ -326,29 +430,29 @@ function buildConcepts(row: Record<string, unknown>): ExpenseReceiptConcept[] {
       ]),
     );
 
-    if (description || amount !== "") {
-      concepts.push(createConcept(description || `Concepto ${index}`, amount));
+    if (description || amount) {
+      concepts.push(createStatementConcept(description || `Concepto ${index}`, amount));
     }
   }
 
   const genericDescription = String(
     getFirstValue(row, ["concepto", "descripcion", "detalle"]),
   ).trim();
-  const genericAmount = parseNumber(
+  const genericAmount = formatImportedAmount(
     getFirstValue(row, ["importe", "monto", "valor"]),
   );
-  if (genericDescription || genericAmount !== "") {
-    concepts.push(createConcept(genericDescription || "Concepto", genericAmount));
+  if (genericDescription || genericAmount) {
+    concepts.push(createStatementConcept(genericDescription || "Concepto", genericAmount));
   }
 
   if (concepts.length === 0) {
-    const total = parseNumber(row.total);
-    if (total !== "") {
-      concepts.push(createConcept("Expensas", total));
+    const total = formatImportedAmount(row.total);
+    if (total) {
+      concepts.push(createStatementConcept("Expensas", total));
     }
   }
 
-  return concepts.length > 0 ? concepts : [createConcept()];
+  return concepts.length > 0 ? concepts : [createStatementConcept()];
 }
 
 function parseWorkbookRows(rows: any[], currentAdministration: AdministrationSettings) {
@@ -489,8 +593,8 @@ function parseWorkbookRows(rows: any[], currentAdministration: AdministrationSet
     };
     ownersMap.set(owner.id, owner);
 
-    const concepts = buildConcepts(row);
-    const normalizedConcepts = normalizeConcepts(concepts);
+    const monthlyConcepts = buildMonthlyConcepts(row);
+    const normalizedMonthlyConcepts = normalizeStatementConcepts(monthlyConcepts);
     const draftReceipt = {
       id: crypto.randomUUID(),
       receiptNumber: String(
@@ -520,13 +624,38 @@ function parseWorkbookRows(rows: any[], currentAdministration: AdministrationSet
           "Cuenta corriente",
         ),
       ),
-      totalAmount: 0,
+      totalAmount: parseAccountStatementAmount(
+        formatImportedAmount(
+          getFirstValue(row, ["totalapagar", "total_a_pagar", "total", "totalfinal"]),
+        ),
+      ),
+      poseeDeuda: parseDebtFlag(
+        getFirstValue(row, ["poseedeuda", "estadofinal", "tienedeuda", "deudapendiente"]),
+      ),
       notes: String(getFirstValue(row, ["observaciones", "nota", "notas"])),
       status: "draft" as const,
-      concepts: normalizedConcepts,
+      concepts: syncLegacyConcepts(normalizedMonthlyConcepts),
+      accountStatement: {
+        monthlyConcepts: normalizedMonthlyConcepts,
+        historicDebt: formatImportedAmount(
+          getFirstValue(row, ["deuda", "historicodeladeuda", "deudahistorica", "saldodeudor"]),
+        ),
+        interest: formatImportedAmount(
+          getFirstValue(row, ["intereses", "interes", "interesespormora", "interesesmora"]),
+        ),
+        totalToPay: formatImportedAmount(
+          getFirstValue(row, ["totalapagar", "total_a_pagar", "total", "totalfinal"]),
+        ),
+        paymentMade: formatImportedAmount(
+          getFirstValue(row, ["pagorealizado", "supago", "pago"]),
+        ),
+        difference: formatImportedAmount(
+          getFirstValue(row, ["diferencia", "saldoafavor", "favor"]),
+        ),
+      },
     };
 
-    receipts.push(normalizeReceiptFinancials(draftReceipt));
+    receipts.push(cloneReceipt(draftReceipt));
   });
 
   return {
@@ -615,10 +744,10 @@ export default function ConsortiumReceiptGenerator() {
   const [units, setUnits] = useState<Unit[]>(() => loadUnits());
   const [owners, setOwners] = useState<Owner[]>(() => loadOwners());
   const [savedReceipts, setSavedReceipts] = useState<ExpenseReceipt[]>(() =>
-    loadExpenseReceipts(),
+    loadExpenseReceipts().map((item) => cloneReceipt(item)),
   );
   const [receipt, setReceipt] = useState<ExpenseReceipt>(() => {
-    const saved = loadExpenseReceipts();
+    const saved = loadExpenseReceipts().map((item) => cloneReceipt(item));
     return saved[0] ?? createReceiptFromDraft();
   });
   const [errors, setErrors] = useState<ExpenseErrors>({});
@@ -667,15 +796,13 @@ export default function ConsortiumReceiptGenerator() {
     [owners, receipt.ownerId],
   );
 
-  const financialSummary = useMemo(
-    () => calculateReceiptTotals(receipt),
-    [receipt],
+  const totalToPayDisplay = useMemo(
+    () => formatAccountStatementAmount(receipt.accountStatement.totalToPay),
+    [receipt.accountStatement.totalToPay],
   );
 
-  const totalAmount = financialSummary.totalAmount;
-
   const previewReceipt = useMemo(
-    () => normalizeReceiptFinancials(receipt),
+    () => cloneReceipt(receipt),
     [receipt],
   );
 
@@ -690,27 +817,35 @@ export default function ConsortiumReceiptGenerator() {
     setReceipt((current) => ({ ...current, [key]: value }));
   }
 
-  function updateAccountStatus<K extends keyof ExpenseReceipt["accountStatus"]>(
+  function updateAccountStatement<K extends keyof ExpenseReceipt["accountStatement"]>(
     key: K,
-    value: ExpenseReceipt["accountStatus"][K],
+    value: ExpenseReceipt["accountStatement"][K],
   ) {
     setReceipt((current) => ({
       ...current,
-      accountStatus: { ...current.accountStatus, [key]: value },
+      accountStatement: { ...current.accountStatement, [key]: value },
     }));
   }
 
-  function updateConcept(
+  function updateMonthlyConcept(
     id: string,
-    key: keyof ExpenseReceiptConcept,
-    value: string | number | "",
+    key: keyof ExpenseAccountStatementConcept,
+    value: string,
   ) {
-    setReceipt((current) => ({
-      ...current,
-      concepts: current.concepts.map((concept) =>
+    setReceipt((current) => {
+      const monthlyConcepts = current.accountStatement.monthlyConcepts.map((concept) =>
         concept.id === id ? { ...concept, [key]: value } : concept,
-      ),
-    }));
+      );
+
+      return {
+        ...current,
+        concepts: syncLegacyConcepts(monthlyConcepts),
+        accountStatement: {
+          ...current.accountStatement,
+          monthlyConcepts,
+        },
+      };
+    });
   }
 
   function updateSelectedConsortium<K extends keyof Consortium>(
@@ -790,24 +925,48 @@ export default function ConsortiumReceiptGenerator() {
   }
 
   function handleAddConcept() {
-    setReceipt((current) => ({
-      ...current,
-      concepts: [...current.concepts, createConcept()],
-    }));
+    setReceipt((current) => {
+      const nextConcept = createStatementConcept();
+      const nextMonthlyConcepts = [
+        ...current.accountStatement.monthlyConcepts,
+        nextConcept,
+      ];
+
+      return {
+        ...current,
+        accountStatement: {
+          ...current.accountStatement,
+          monthlyConcepts: nextMonthlyConcepts,
+        },
+        concepts: syncLegacyConcepts(nextMonthlyConcepts),
+      };
+    });
   }
 
   function handleRemoveConcept(id: string) {
-    setReceipt((current) => ({
-      ...current,
-      concepts:
-        current.concepts.length === 1
-          ? [createConcept()]
-          : current.concepts.filter((concept) => concept.id !== id),
-    }));
+    setReceipt((current) => {
+      const nextMonthlyConcepts =
+        current.accountStatement.monthlyConcepts.length === 1
+          ? [createStatementConcept()]
+          : current.accountStatement.monthlyConcepts.filter((concept) => concept.id !== id);
+
+      return {
+        ...current,
+        concepts: syncLegacyConcepts(nextMonthlyConcepts),
+        accountStatement: {
+          ...current.accountStatement,
+          monthlyConcepts: nextMonthlyConcepts,
+        },
+      };
+    });
   }
 
   function handleSaveReceipt() {
-    const nextReceipt = normalizeReceiptFinancials(receipt);
+    const nextReceipt = cloneReceipt({
+      ...receipt,
+      concepts: syncLegacyConcepts(receipt.accountStatement.monthlyConcepts),
+      totalAmount: parseAccountStatementAmount(receipt.accountStatement.totalToPay),
+    });
     const nextErrors = validateReceipt(nextReceipt);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
@@ -831,12 +990,7 @@ export default function ConsortiumReceiptGenerator() {
       return [readyReceipt, ...current];
     });
 
-    setReceipt({
-      ...readyReceipt,
-      totalAmount: readyReceipt.totalAmount,
-      accountStatus: { ...readyReceipt.accountStatus },
-      concepts: readyReceipt.concepts.map((concept) => ({ ...concept })),
-    });
+    setReceipt(cloneReceipt(readyReceipt));
     setFeedback({
       type: "success",
       message: `Recibo ${readyReceipt.receiptNumber || "sin numero"} guardado correctamente.`,
@@ -847,12 +1001,7 @@ export default function ConsortiumReceiptGenerator() {
     setErrors({});
     setFeedback(null);
     const selectedReceipt = savedReceipts[index];
-    const normalizedReceipt = normalizeReceiptFinancials(selectedReceipt);
-    setReceipt({
-      ...normalizedReceipt,
-      accountStatus: { ...normalizedReceipt.accountStatus },
-      concepts: normalizedReceipt.concepts.map((concept) => ({ ...concept })),
-    });
+    setReceipt(cloneReceipt(selectedReceipt));
   }
 
   function handleDeleteReceipt(index: number) {
@@ -868,7 +1017,11 @@ export default function ConsortiumReceiptGenerator() {
 
   async function handlePrintReceipt() {
     console.log("[PDF] click en boton Imprimir");
-    const normalizedReceipt = normalizeReceiptFinancials(receipt);
+    const normalizedReceipt = cloneReceipt({
+      ...receipt,
+      concepts: syncLegacyConcepts(receipt.accountStatement.monthlyConcepts),
+      totalAmount: parseAccountStatementAmount(receipt.accountStatement.totalToPay),
+    });
     const nextErrors = validateReceipt(normalizedReceipt);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
@@ -918,7 +1071,7 @@ export default function ConsortiumReceiptGenerator() {
     setUnits((current) => mergeUnique(current, parsed.units));
     setOwners((current) => mergeUnique(current, parsed.owners));
     setSavedReceipts((current) => [...parsed.receipts, ...current]);
-    setReceipt(parsed.receipts[0] ?? createReceiptFromDraft());
+    setReceipt(cloneReceipt(parsed.receipts[0] ?? createReceiptFromDraft()));
     setErrors({});
   }
 
@@ -1066,10 +1219,10 @@ export default function ConsortiumReceiptGenerator() {
               </div>
               <div className="rounded-xl bg-white px-4 py-3 text-right shadow-sm">
                 <div className="text-xs uppercase tracking-wide text-slate-500">
-                  Total en tiempo real
+                  Total a pagar cargado
                 </div>
                 <div className="text-2xl font-bold text-slate-800">
-                  {money(totalAmount)}
+                  {totalToPayDisplay}
                 </div>
               </div>
             </div>
@@ -1234,119 +1387,131 @@ export default function ConsortiumReceiptGenerator() {
 
           <div className="mt-4 rounded-2xl bg-white p-4 shadow">
             <SectionTitle title="Estado de cuenta" />
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <NumberInput
-                label="Saldo anterior"
-                value={receipt.accountStatus.saldoAnterior}
-                onChange={(value) => updateAccountStatus("saldoAnterior", value)}
-              />
-              <NumberInput
-                label="Pago realizado"
-                value={receipt.accountStatus.pagoRealizado}
-                onChange={(value) => updateAccountStatus("pagoRealizado", value)}
-              />
-              <label className="text-sm">
-                <span className="mb-1 block text-gray-600">Saldo a favor</span>
-                <input
-                  readOnly
-                  value={money(financialSummary.saldoAFavor)}
-                  className="w-full rounded-xl border bg-slate-100 px-3 py-2 text-slate-600 outline-none"
-                />
-                <span className="mt-1 block text-xs text-slate-500">
-                  Se calcula automaticamente segun saldo anterior, pago realizado y total actual.
-                </span>
-              </label>
-              <SelectField
-                label="Forma de pago"
-                value={receipt.paymentMethod}
-                onChange={(value) => updateReceipt("paymentMethod", value as PaymentMethod)}
-                options={[
-                  { value: "Efectivo", label: "Efectivo" },
-                  { value: "Transferencia", label: "Transferencia" },
-                  { value: "Mercado Pago", label: "Mercado Pago" },
-                  { value: "Cheque", label: "Cheque" },
-                  { value: "Otro", label: "Otro" },
-                ]}
-                placeholder="Selecciona forma de pago"
-              />
-              <TextArea
-                label="Lugar y forma de pago"
-                value={receipt.paymentDetails}
-                onChange={(value) => updateReceipt("paymentDetails", value)}
-              />
-            </div>
-          </div>
-
-          <div className="mt-4 rounded-2xl bg-white p-4 shadow">
-            <SectionTitle
-              title="Conceptos"
-              subtitle="La tabla replica el formato real del recibo de expensas."
-            />
-
-            <div className="mb-3 grid grid-cols-[1fr_150px] gap-3 border-b border-slate-200 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <span>Descripcion</span>
-              <span className="text-right">Importe</span>
-            </div>
-
-            <div className="space-y-3">
-              {receipt.concepts.map((concept, index) => (
-                <div key={concept.id} className="rounded-xl border p-3">
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="text-sm font-semibold text-slate-700">
-                      Concepto {index + 1}
-                    </span>
-                    <button
-                      type="button"
-                      className="rounded-lg border border-red-200 bg-red-50 px-3 py-1 text-sm text-red-700 hover:bg-red-100"
-                      onClick={() => handleRemoveConcept(concept.id)}
-                    >
-                      Eliminar
-                    </button>
+            <div className="space-y-5">
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-700">
+                      Conceptos del mes
+                    </h3>
+                    <p className="text-sm text-slate-500">
+                      Estos importes son manuales o importados desde Excel. No se recalculan.
+                    </p>
                   </div>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <Text
-                      label="Concepto"
-                      value={concept.description}
-                      onChange={(value) => updateConcept(concept.id, "description", value)}
-                    />
-                    <NumberInput
-                      label="Importe"
-                      value={concept.amount}
-                      onChange={(value) => updateConcept(concept.id, "amount", value)}
-                    />
-                  </div>
-                  <FieldError
-                    message={errors.conceptRows?.[concept.id]?.description}
-                  />
-                  <FieldError message={errors.conceptRows?.[concept.id]?.amount} />
+                  <button
+                    type="button"
+                    className="rounded-xl bg-indigo-600 px-3 py-2 text-white hover:bg-indigo-700"
+                    onClick={handleAddConcept}
+                  >
+                    Agregar concepto
+                  </button>
                 </div>
-              ))}
-            </div>
 
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <button
-                type="button"
-                className="rounded-xl bg-indigo-600 px-3 py-2 text-white hover:bg-indigo-700"
-                onClick={handleAddConcept}
-              >
-                Agregar concepto
-              </button>
-              <div className="text-right">
-                <div className="text-sm text-gray-500">
-                  Conceptos: {money(financialSummary.conceptsSubtotal)}
+                <div className="mb-3 grid grid-cols-[1fr_160px] gap-3 border-b border-slate-200 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <span>Descripcion</span>
+                  <span className="text-right">Importe</span>
                 </div>
-                <div className="text-sm text-gray-500">
-                  Cuenta total: {money(financialSummary.grossTotal)}
+
+                <div className="space-y-3">
+                  {receipt.accountStatement.monthlyConcepts.map((concept, index) => (
+                    <div key={concept.id} className="rounded-xl border p-3">
+                      <div className="mb-3 flex items-center justify-between">
+                        <span className="text-sm font-semibold text-slate-700">
+                          Concepto {index + 1}
+                        </span>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-red-200 bg-red-50 px-3 py-1 text-sm text-red-700 hover:bg-red-100"
+                          onClick={() => handleRemoveConcept(concept.id)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <Text
+                          label="Descripcion"
+                          value={concept.description}
+                          onChange={(value) => updateMonthlyConcept(concept.id, "description", value)}
+                        />
+                        <Text
+                          label="Importe"
+                          value={concept.amount}
+                          onChange={(value) => updateMonthlyConcept(concept.id, "amount", value)}
+                        />
+                      </div>
+                      <FieldError
+                        message={errors.monthlyConceptRows?.[concept.id]?.description}
+                      />
+                      <FieldError message={errors.monthlyConceptRows?.[concept.id]?.amount} />
+                    </div>
+                  ))}
                 </div>
-                <div className="text-sm text-gray-500">
-                  Saldo a favor calculado: {money(financialSummary.saldoAFavor)}
-                </div>
-                <div className="mt-1 text-sm font-medium text-slate-600">Total final</div>
-                <div className="text-2xl font-bold text-slate-800">{money(totalAmount)}</div>
+                <FieldError message={errors.concepts} />
               </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <Text
+                  label="Deuda"
+                  value={receipt.accountStatement.historicDebt}
+                  onChange={(value) => updateAccountStatement("historicDebt", value)}
+                />
+                <Text
+                  label="Intereses"
+                  value={receipt.accountStatement.interest}
+                  onChange={(value) => updateAccountStatement("interest", value)}
+                />
+                <Text
+                  label="Total a pagar"
+                  value={receipt.accountStatement.totalToPay}
+                  onChange={(value) => updateAccountStatement("totalToPay", value)}
+                />
+                <Text
+                  label="Pago realizado"
+                  value={receipt.accountStatement.paymentMade}
+                  onChange={(value) => updateAccountStatement("paymentMade", value)}
+                />
+                <Text
+                  label="Diferencia"
+                  value={receipt.accountStatement.difference}
+                  onChange={(value) => updateAccountStatement("difference", value)}
+                />
+                <SelectField
+                  label="Posee deuda"
+                  value={receipt.poseeDeuda ? "si" : "no"}
+                  onChange={(value) => updateReceipt("poseeDeuda", value === "si")}
+                  options={[
+                    { value: "no", label: "No" },
+                    { value: "si", label: "Si" },
+                  ]}
+                  placeholder="Selecciona una opcion"
+                />
+              </div>
+              <FieldError message={errors.totalAmount} />
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <SelectField
+                  label="Forma de pago"
+                  value={receipt.paymentMethod}
+                  onChange={(value) => updateReceipt("paymentMethod", value as PaymentMethod)}
+                  options={[
+                    { value: "Efectivo", label: "Efectivo" },
+                    { value: "Transferencia", label: "Transferencia" },
+                    { value: "Mercado Pago", label: "Mercado Pago" },
+                    { value: "Cheque", label: "Cheque" },
+                    { value: "Otro", label: "Otro" },
+                  ]}
+                  placeholder="Selecciona forma de pago"
+                />
+                <TextArea
+                  label="Lugar y forma de pago"
+                  value={receipt.paymentDetails}
+                  onChange={(value) => updateReceipt("paymentDetails", value)}
+                />
+              </div>
+              <p className="text-xs text-slate-500">
+                Los campos del Estado de Cuenta se muestran exactamente como los cargues o importes.
+              </p>
             </div>
-            <FieldError message={errors.concepts} />
-            <FieldError message={errors.totalAmount} />
           </div>
 
           <div className="mt-4 rounded-2xl bg-white p-4 shadow">

@@ -7,7 +7,7 @@ import type {
   Unit,
 } from "./interfaz";
 import PivaConsortiumLogo from "./assets/piva-logo-consorcio.png";
-import PivaSignature from "./assets/piva-signature.jpg";
+import PivaSignatureNueva from "./assets/piva-signature-nueva.jpg";
 
 export const INIT_DATA: ReceiptData = {
   codigo: "",
@@ -50,8 +50,8 @@ export const CONSORTIUM_ADMINISTRATION_INIT: AdministrationSettings = {
   telefono: "",
   email: "",
   website: "www.piva.com.ar",
-  firmaUrl: PivaSignature,
-  firmaAclaracion: "Firma autorizada y aclaracion",
+  firmaUrl: PivaSignatureNueva,
+  firmaAclaracion: "Administracion",
 };
 
 export const CONSORTIUMS_INIT: Consortium[] = [];
@@ -76,7 +76,16 @@ export const CONSORTIUM_INIT_DATA: ExpenseReceipt = {
   paymentMethod: "Transferencia",
   paymentDetails: "",
   totalAmount: 0,
+  poseeDeuda: false,
   notes: "",
   status: "draft",
   concepts: [{ id: "concept-1", description: "", amount: "" }],
+  accountStatement: {
+    monthlyConcepts: [{ id: "statement-concept-1", description: "", amount: "" }],
+    historicDebt: "",
+    interest: "",
+    totalToPay: "",
+    paymentMade: "",
+    difference: "",
+  },
 };
